@@ -1,0 +1,43 @@
+{
+  "source_video": "video_sample_1.mov",
+  "compressed_video": "compressed_output.mp4",
+  "original_size_mb": 599.77,
+  "compressed_size_mb": 21.9,
+  "reduction_pct": 71.5,
+  "original_duration_sec": 122.0,
+  "compressed_duration_sec": 23.0,
+  "original_fps": 60.0,
+  "output_fps": 12,
+  "frames_original": 7345,
+  "frames_kept": 281,
+  "processing_time_sec": 18.4,
+
+  "segments": [
+    {
+      "segment_id": 1,
+      "start_sec": 0.0,
+      "end_sec": 3.5,
+      "frames_in_segment": 10,
+      "reason_kept": "face_detected",
+      "face_count_in_segment": 8,
+      "motion_score_avg": 0.23,
+      "thumbnail_b64": "/9j/4AAQSkZJRgABAQAAAQABAAD..."
+    },
+    {
+      "segment_id": 2,
+      "start_sec": 5.0,
+      "end_sec": 8.2,
+      "frames_in_segment": 7,
+      "reason_kept": "context_frame",
+      "face_count_in_segment": 0,
+      "motion_score_avg": 0.04,
+      "thumbnail_b64": "/9j/4AAQSkZJRgABAQAAAQABAAD..."
+    }
+  ],
+
+  "frames_discarded_reasons": {
+    "near_duplicate_phash": 1200,
+    "low_motion_no_face": 1380,
+    "total_discarded": 2580
+  }
+}
