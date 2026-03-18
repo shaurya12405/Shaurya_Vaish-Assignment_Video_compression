@@ -273,3 +273,123 @@ def generate_compression_report(segments: list, stats: dict, output_path: Path):
 
     with open(output_path, "w") as f:
         f.write(html)
+
+# ---------------------------------------------------------------------------
+# MAIN
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    t_start = time.time()
+
+    cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    )
+
+    cap          = cv2.VideoCapture(str(VIDEO_IN))
+    total        = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps_in       = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    fw           = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    fh           = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    duration     = total / fps_in
+    orig_mb      = VIDEO_IN.stat().st_size / 1_000_000
+
+    print(f"Input: {VIDEO_IN}  |  {total} frames  |  {duration:.1f}s  |  {orig_mb:.1f} MB")
+
+    kept_frames = []
+    segments    = []
+    prev_frame  = None
+    prev_gray   = None
+    prev_hash   = ""
+    last_kept_t = -999.0
+    cur_seg     = None
+    disc_dup    = 0
+    disc_stat   = 0
+
+    frame_idx = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        ts = frame_idx / fps_in
+
+        keep, reason, motion, face = should_keep_frame(
+            frame, prev_frame, prev_hash, last_kept_t, ts, cascade
+        )
+
+        if keep:
+            kept_frames.append(frame.copy())
+            prev_hash   = compute_phash(frame)
+            last_kept_t = ts
+
+            if cur_seg is None or (ts - cur_seg["end_sec"]) > 2.5:
+                if cur_seg:
+                    segments.append(cur_seg)
+                cur_seg = {
+                    "segment_id":            len(segments) + 1,
+                    "start_sec":             round(ts, 2),
+                    "end_sec":               round(ts, 2),
+                    "frames_in_segment":     1,
+                    "reason_kept":           reason,
+                    "face_count_in_segment": 1 if face else 0,
+                    "motion_score_avg":      round(motion, 3),
+                    "thumbnail_b64":         frame_to_b64_thumb(frame),
+                }
+            else:
+                cur_seg["end_sec"]               = round(ts, 2)
+                cur_seg["frames_in_segment"]    += 1
+                cur_seg["face_count_in_segment"] += 1 if face else 0
+        else:
+            if "duplicate" in reason:
+                disc_dup  += 1
+            else:
+                disc_stat += 1
+
+        prev_frame = frame
+        prev_gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame_idx += 1
+
+    if cur_seg:
+        segments.append(cur_seg)
+    cap.release()
+
+    print(f"Kept {len(kept_frames)} / {total} frames across {len(segments)} segments")
+    print("Writing compressed video ...")
+    write_frames_to_video(kept_frames, VIDEO_OUT, OUTPUT_FPS, (fw, fh))
+
+    comp_mb = VIDEO_OUT.stat().st_size / 1_000_000 if VIDEO_OUT.exists() else 0.0
+    t_end   = time.time()
+
+    stats = {
+        "source_video":             str(VIDEO_IN),
+        "compressed_video":         str(VIDEO_OUT),
+        "original_size_mb":         round(orig_mb, 2),
+        "compressed_size_mb":       round(comp_mb, 2),
+        "reduction_pct":            round((1 - comp_mb / (orig_mb + 1e-9)) * 100, 1),
+        "original_duration_sec":    round(duration, 2),
+        "compressed_duration_sec":  round(len(kept_frames) / OUTPUT_FPS, 2),
+        "original_fps":             round(fps_in, 2),
+        "output_fps":               OUTPUT_FPS,
+        "frames_original":          total,
+        "frames_kept":              len(kept_frames),
+        "processing_time_sec":      round(t_end - t_start, 2),
+        "segments":                 segments,
+        "frames_discarded_reasons": {
+            "near_duplicate_phash": disc_dup,
+            "low_motion_no_face":   disc_stat,
+            "total_discarded":      total - len(kept_frames),
+        },
+    }
+
+    with open(SEGMENTS_JSON_OUT, "w") as f:
+        json.dump(stats, f, indent=2)
+
+    generate_compression_report(segments, stats, REPORT_HTML_OUT)
+
+    print()
+    print("=" * 55)
+    print(f"  Done in {stats['processing_time_sec']}s")
+    print(f"  Size:     {orig_mb:.1f} MB  →  {comp_mb:.1f} MB  ({stats['reduction_pct']}% smaller)")
+    print(f"  Duration: {duration:.1f}s  →  {stats['compressed_duration_sec']:.1f}s")
+    print(f"  Report  → {REPORT_HTML_OUT}")
+    print(f"  JSON    → {SEGMENTS_JSON_OUT}")
+    print("=" * 55)
