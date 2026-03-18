@@ -274,6 +274,46 @@ def generate_compression_report(segments: list, stats: dict, output_path: Path):
     with open(output_path, "w") as f:
         f.write(html)
 
+def calibrate_motion_threshold(video_path, duration_sec=30):
+    cap = cv2.VideoCapture(str(video_path))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    
+    max_frames = int(fps * duration_sec)
+    
+    prev_gray = None
+    motion_scores = []
+    
+    count = 0
+    
+    while count < max_frames:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        
+        if prev_gray is not None:
+            score = compute_motion_score(prev_gray, gray)
+            motion_scores.append(score)
+        
+        prev_gray = gray
+        count += 1
+    
+    cap.release()
+    
+    if len(motion_scores) == 0:
+        return 0.05
+    
+    # Use percentile (robust to outliers)
+    base_motion = np.percentile(motion_scores, 60)
+    
+    # Slightly above background motion
+    calibrated_thresh = base_motion * 1.5
+    
+    print(f"Auto-calibrated motion threshold: {calibrated_thresh:.4f}")
+    
+    return calibrated_thresh
+
 # ---------------------------------------------------------------------------
 # MAIN
 # ---------------------------------------------------------------------------
@@ -286,6 +326,7 @@ if __name__ == "__main__":
     )
 
     cap          = cv2.VideoCapture(str(VIDEO_IN))
+    MOTION_DISCARD_THRESH = calibrate_motion_threshold(VIDEO_IN)
     total        = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps_in       = cap.get(cv2.CAP_PROP_FPS) or 25.0
     fw           = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
