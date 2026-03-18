@@ -1,3 +1,35 @@
+"""
+video_compression.py
+Sentio Mind · Project 2 · Smart Behavioral Video Compression
+
+Copy this file to solution.py and fill in every TODO block.
+Do not rename any function.
+Run: python solution.py
+Requires ffmpeg installed on your system: sudo apt install ffmpeg
+"""
+
+import cv2
+import json
+import base64
+import subprocess
+import time
+import numpy as np
+from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# CONFIG
+# ---------------------------------------------------------------------------
+VIDEO_IN               = Path("video_sample_1.mov")
+VIDEO_OUT              = Path("compressed_output.mp4")
+REPORT_HTML_OUT        = Path("compression_report.html")
+SEGMENTS_JSON_OUT      = Path("segments_kept.json")
+
+PHASH_THRESHOLD        = 0.95   # similarity above this = near-duplicate, discard
+MOTION_KEEP_THRESH     = 0.15   # keep frame if motion exceeds this (no face needed)
+MOTION_DISCARD_THRESH  = 0.05   # definitely discard below this
+CONTEXT_EVERY_SEC      = 3      # force-keep one frame every this many seconds
+OUTPUT_FPS             = 12     # frame rate of the output video
+OUTPUT_CRF             = 28     # ffmpeg quality: lower = better quality + larger file
 # ---------------------------------------------------------------------------
 # PERCEPTUAL HASH
 # ---------------------------------------------------------------------------
